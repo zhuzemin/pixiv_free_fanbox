@@ -20,7 +20,7 @@
 // @grant         GM_setValue
 // @grant         GM_getValue
 // @author      zhuzemin
-// @version     1.00
+// @version     1.01
 // @supportURL  https://github.com/zhuzemin
 // @connect-src danbooru.donmai.us
 // @connect-src cse.google.com
@@ -239,7 +239,13 @@ function unlock(json) {
         const day = 60 * 60 * 24 * 1000;
         debug(day);
         let interval = setInterval(() => {
-                let parent = getElementByXpath('/html/body/div/div[5]/div[1]/div/div[3]/div/div/div[1]');
+                let parent = null;
+                for (let xpath of ['//*[@id="root"]/div[5]/div[1]/div[2]/div[3]/div/div/div[1]', '/html/body/div/div[5]/div[1]/div/div[3]/div/div/div[1]']) {
+                        parent = getElementByXpath(xpath);
+                        if (parent != null) {
+                                break;
+                        }
+                }
                 debug(parent.childNodes.length);
                 if (parent != null && parent.childNodes.length >= 11 && !config.changed) {
                         //clearInterval(interval);
