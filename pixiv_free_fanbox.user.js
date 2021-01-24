@@ -20,7 +20,7 @@
 // @grant         GM_setValue
 // @grant         GM_getValue
 // @author      zhuzemin
-// @version     1.06
+// @version     1.07
 // @supportURL  https://github.com/zhuzemin
 // @connect-src danbooru.donmai.us
 // @connect-src cse.google.com
@@ -28,7 +28,7 @@
 // ==/UserScript==
 //config
 let config = {
-        'ver': '1.06',
+        'ver': '1.07',
         'debug': false,
         'api': {
                 //'google': 'https://cse.google.com/cse/element/v1?cx=a5e2ba84062470dee&q={{keyword}}&safe=off&cse_tok=AJvRUv2fkaAldGWb8xOFfG2krdXS:1611290690970&callback=google.search.cse.api6888',
@@ -129,9 +129,10 @@ function get_artist(flag, obj = null) {
                                                         let json = result.response[0];
                                                         const keyword = json.id;
                                                         const url = config.api[flag].artist_name.replace('{{keyword}}', keyword);
-                                                        const obj = new requestObject(url);
+                                                        let obj = new requestObject(url);
+                                                        obj.respType = 'text';
                                                         debug(url);
-                                                        save_obj(flag, json)
+                                                        save_obj(flag, json);
                                                         resolve(get_artist('yandere_title', obj));
                                                 }
                                                 else if (!config.retry) {
@@ -155,10 +156,16 @@ function get_artist(flag, obj = null) {
                                 flag = 'yandere';
                                 httpRequest(obj).then(
                                         function (result) {
-                                                let alias = result.finalUrl.match(/title=(.+)/)[1];
+                                                let dom = new DOMParser().parseFromString(result.responseText, "text/html");
+                                                debug(dom.title);
+                                                let elems=dom.querySelectorAll('a[href*="/wiki/show?title="]');
+                                                debug(elems.length);
+                                                debug(elems[1].href);
+                                                let alias = elems[1].href.match(/title=(.+)/)[1];
+                                                debug(alias);
                                                 config.obj.src[flag].artist['origin_name'] = config.obj.src[flag].artist.name;
                                                 config.obj.src[flag].artist.name = alias;
-                                                debug(alias);
+                                                GM_setValue(config.hostname, config.obj);
                                                 resolve('suc');
                                         }
                                 );
@@ -275,6 +282,9 @@ function unlock() {
                                                                                                 'file_url': file_url,
                                                                                                 'large_file_url': large_file_url
                                                                                         });
+                                                                                }
+                                                                                else if (date - created_date > day * 3) {
+                                                                                        break;
                                                                                 }
                                                                         }
                                                                 }
