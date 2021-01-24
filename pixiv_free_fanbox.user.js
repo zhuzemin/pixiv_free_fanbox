@@ -20,7 +20,7 @@
 // @grant         GM_setValue
 // @grant         GM_getValue
 // @author      zhuzemin
-// @version     1.02
+// @version     1.03
 // @supportURL  https://github.com/zhuzemin
 // @connect-src danbooru.donmai.us
 // @connect-src cse.google.com
@@ -167,7 +167,7 @@ function get_posts(flag) {
                         const url = config.api[flag].posts.replace('{{keyword}}', keyword);
                         const obj = new requestObject(url);
                         httpRequest(obj).then(
-                                () => {
+                                (result) => {
                                         config.obj.src[flag].posts = result.response;
                                         config.obj.update = Date.now();
                                         config.obj.suc++;
@@ -188,14 +188,14 @@ function unlock() {
         const day = 60 * 60 * 24 * 1000;
         debug(day);
         let interval = setInterval(() => {
-                let parent = null;
+                let parent = null;//*[@id="root"]/div[5]/div[1]/div[2]/div[3]/div/div/div[1]
                 for (let xpath of ['//*[@id="root"]/div[5]/div[1]/div[2]/div[3]/div/div/div[1]', '/html/body/div/div[5]/div[1]/div/div[3]/div/div/div[1]']) {
                         parent = getElementByXpath(xpath);
                         if (parent != null) {
                                 break;
                         }
                 }
-                debug(parent.childNodes.length);
+                //debug(parent.childNodes.length);
                 if (parent != null && parent.childNodes.length >= 11 && !config.changed && config.obj.suc == Object.keys(config.api).length) {
                         //clearInterval(interval);
                         let pair = [];
