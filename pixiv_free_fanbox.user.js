@@ -20,7 +20,7 @@
 // @grant         GM_setValue
 // @grant         GM_getValue
 // @author      zhuzemin
-// @version     1.01
+// @version     1.02
 // @supportURL  https://github.com/zhuzemin
 // @connect-src danbooru.donmai.us
 // @connect-src cse.google.com
@@ -30,22 +30,19 @@
 let config = {
         'debug': false,
         'api': {
-                'google': 'https://cse.google.com/cse/element/v1?cx=a5e2ba84062470dee&q={{keyword}}&safe=off&cse_tok=AJvRUv2fkaAldGWb8xOFfG2krdXS:1611290690970&callback=google.search.cse.api6888',
+                //'google': 'https://cse.google.com/cse/element/v1?cx=a5e2ba84062470dee&q={{keyword}}&safe=off&cse_tok=AJvRUv2fkaAldGWb8xOFfG2krdXS:1611290690970&callback=google.search.cse.api6888',
 
                 'danbooru': {
-                        'enable': false,
                         'base': 'https://danbooru.donmai.us',
                         'artists': '/artists.json?search[url_matches]={{keyword}}',
                         'posts': '/posts.json?tags={{keyword}}&limit=200',
                 },
                 'yandere': {
-                        'enable': false,
                         'base': 'https://yande.re',
                         'artists': '/artist.json?name={{keyword}}',
                         'posts': '/post.json?limit=100&tags={{keyword}}',
                         'artist_name': '/artist/show/{{keyword}}',
                 },
-                'current': null,
         },
         'hostname': getLocation(window.location.href).hostname,
         'obj': null,
@@ -53,8 +50,14 @@ let config = {
 }
 let debug = config.debug ? console.log.bind(console) : function () {
 };
-
-toggle();
+config.obj = GM_getValue(config.hostname);
+for (let key in config.api) {
+        for (let sub_key in config.api[key]) {
+                if (sub_key != 'base') {
+                        config.api[key][sub_key] = config.api[key].base + config.api[key][sub_key];
+                }
+        }
+}
 class requestObject {
         constructor(url) {
                 this.method = 'GET';
@@ -68,47 +71,6 @@ class requestObject {
         }
 }
 
-function toggle(init = true) {
-        if (init) {
-                debug('init');
-                let count = 0;
-                for (let key in config.api) {
-                        count++;
-                        debug(key);
-                        const hostname = key + '_' + config.hostname;
-                        debug(hostname);
-                        config.obj = GM_getValue(hostname) || null;
-                        if (config.obj != null || count == 3) {
-                                let item = config.api[key];
-                                item.enable = true;
-                                config.hostname = hostname;
-                                config.api.current = item;
-                                break;
-                        }
-                }
-
-        }
-        else {
-                debug('switch');
-                if (!config.api.yandere.enable) {
-                        config.api.yandere.enable = true;
-                        config.api.danbooru.enable = false;
-                        config.api.current = config.api.yandere;
-                        config.hostname = 'yandere_' + getLocation(window.location.href).hostname;
-                        config.obj = GM_getValue(config.hostname) || null;
-                }
-                else if (!config.api.danbooru.enable) {
-                        config.api.danbooru.enable = true;
-                        config.api.yandere.enable = false;
-                        config.api.current = config.api.danbooru;
-                        config.hostname = 'danbooru_' + getLocation(window.location.href).hostname;
-                        config.obj = GM_getValue(config.hostname) || null;
-                }
-        }
-        config.api.current.artists = config.api.current.base + config.api.current.artists;
-        config.api.current.posts = config.api.current.base + config.api.current.posts;
-        config.api.current.artist_name = config.api.current.base + config.api.current.artist_name;
-}
 
 function googleHandler(resp, deprecated) {
         return new Promise(
@@ -138,103 +100,90 @@ function googleHandler(resp, deprecated) {
                 });
 }
 
-function get_artist(json = null) {
+function get_artist(flag) {
         return new Promise(
                 (resolve, reject) => {
                         debug('get_artist');
-                        if (json == null) {
-                                let keyword = null;
-                                if (config.api.yandere.enable) {
-                                        //keyword = encodeURIComponent(document.title.replace('｜pixivFANBOX', ''));
-                                        let interval = setInterval(() => {
-                                                let elem = document.querySelector('h1');
-                                                if (elem.textContent != '') {
-                                                        clearInterval(interval);
-                                                        keyword = encodeURIComponent(elem.textContent);
-                                                        const url = config.api.current.artists.replace('{{keyword}}', keyword);
-                                                        const obj = new requestObject(url);
-                                                        debug(url);
-                                                        httpRequest(obj).then(
-                                                                function (result) {
-                                                                        if (result.response.length > 0) {
-                                                                                let json = result.response[0];
-                                                                                config.obj = {
-                                                                                        'artist': json,
-                                                                                        'posts': null,
-                                                                                        'update': null,
-                                                                                        'pair': null,
-                                                                                }
-                                                                                GM_setValue(config.hostname, config.obj);
-                                                                                resolve(config.obj.artist);
+                        let keyword = null;
+                        if (flag == 'yandere') {
+                                let interval = setInterval(() => {
+                                        let elem = document.querySelector('h1');
+                                        if (elem.textContent != '') {
+                                                clearInterval(interval);
+                                                keyword = encodeURIComponent(elem.textContent);
+                                                const url = config.api[flag].artists.replace('{{keyword}}', keyword);
+                                                const obj = new requestObject(url);
+                                                debug(url);
+                                                httpRequest(obj).then(
+                                                        function (result) {
+                                                                if (result.response.length > 0) {
+                                                                        let json = result.response[0];
+                                                                        save_obj(flag, json)
+                                                                        resolve('suc');
 
-                                                                        }
-                                                                        else {
-                                                                                reject('error');
-                                                                        }
-                                                                });
-                                                }
-                                        }, 1000);
-                                }
-                                else if (config.api.danbooru.enable) {
-                                        keyword = encodeURIComponent(window.location.href);
-                                        const url = config.api.current.artists.replace('{{keyword}}', keyword);
-                                        const obj = new requestObject(url);
-                                        debug(url);
-                                        httpRequest(obj).then(
-                                                function (result) {
-                                                        if (result.response.length > 0) {
-                                                                let json = result.response[0];
-                                                                config.obj = {
-                                                                        'artist': json,
-                                                                        'posts': null,
-                                                                        'update': null,
-                                                                        'pair': null,
                                                                 }
-                                                                GM_setValue(config.hostname, config.obj);
-                                                                resolve(config.obj.artist);
-
-                                                        }
-                                                        else {
-                                                                reject('error');
-                                                        }
-                                                });
-                                }
-
+                                                                else {
+                                                                        reject('error');
+                                                                }
+                                                        });
+                                        }
+                                }, 1000);
                         }
-                        else {
-                                config.obj = {
-                                        'artist': json,
-                                        'posts': null,
-                                        'update': null,
-                                        'pair': null,
-                                }
-                                GM_setValue(config.hostname, config.obj);
-                                resolve(config.obj.artist);
+                        else if (flag == 'danbooru') {
+                                keyword = encodeURIComponent(window.location.href);
+                                const url = config.api[flag].artists.replace('{{keyword}}', keyword);
+                                const obj = new requestObject(url);
+                                debug(url);
+                                httpRequest(obj).then(
+                                        function (result) {
+                                                if (result.response.length > 0) {
+                                                        let json = result.response[0];
+                                                        save_obj(flag, json)
+                                                        resolve('suc');
 
+                                                }
+                                                else {
+                                                        reject('error');
+                                                }
+                                        });
                         }
                 });
 }
 
-function get_posts(artist) {
+function save_obj(flag, json) {
+
+        config.obj.src[flag] = {
+                'artist': json,
+                'posts': null,
+        };
+}
+
+function get_posts(flag) {
         debug('get_posts');
         return new Promise(
                 (resolve, reject) => {
-                        const keyword = artist.name;
-                        const url = config.api.current.posts.replace('{{keyword}}', keyword);
+                        let count = 0;
+                        const keyword = config.obj.src[flag].artist.name;
+                        const url = config.api[flag].posts.replace('{{keyword}}', keyword);
                         const obj = new requestObject(url);
                         httpRequest(obj).then(
-                                function (result) {
-                                        const json = result.response;
-                                        config.obj.posts = json;
+                                () => {
+                                        config.obj.src[flag].posts = result.response;
                                         config.obj.update = Date.now();
-                                        GM_setValue(config.hostname, config.obj);
-                                        resolve(config.obj.posts);
-                                });
+                                        config.obj.suc++;
+                                        debug('get posts finish');
+                                        resolve('suc');
+                                },
+                                () => {
+                                        debug('get posts finish');
+                                        config.obj.suc++;
+                                }
+                        );
                 });
 }
 
 
-function unlock(json) {
+function unlock() {
         debug('unlock');
         const day = 60 * 60 * 24 * 1000;
         debug(day);
@@ -247,7 +196,7 @@ function unlock(json) {
                         }
                 }
                 debug(parent.childNodes.length);
-                if (parent != null && parent.childNodes.length >= 11 && !config.changed) {
+                if (parent != null && parent.childNodes.length >= 11 && !config.changed && config.obj.suc == Object.keys(config.api).length) {
                         //clearInterval(interval);
                         let pair = [];
                         for (let i = 0; i < parent.childNodes.length; i++) {
@@ -264,47 +213,52 @@ function unlock(json) {
                                         const date = new Date(info.querySelectorAll('div')[1].lastChild.textContent);
                                         debug(date);
                                         let files = [];
-                                        for (let item of json) {
-                                                let created_date = null;
-                                                if (config.api.yandere.enable) {
-                                                        debug(item.created_at * 1000);
-                                                        created_date = new Date(item.created_at * 1000);
-                                                }
-                                                else if (config.api.danbooru.enable) {
-                                                        created_date = new Date(item.created_at);
-                                                }
-                                                debug(created_date);
-                                                if (created_date > date && created_date - date < day) {
-                                                        let file_url = null;
-                                                        let large_file_url = null;
-                                                        if (config.api.danbooru.enable) {
-                                                                file_url = item.file_url;
-                                                                large_file_url = item.large_file_url;
-                                                                debug(file_url);
+                                        for (let key in config.obj.src) {
+                                                const posts = config.obj.src[key].posts;
+                                                for (let item of posts) {
+                                                        let created_date = null;
+                                                        if (key == 'yandere') {
+                                                                debug(item.created_at * 1000);
+                                                                created_date = new Date(item.created_at * 1000);
                                                         }
-                                                        else if (config.api.yandere.enable) {
-                                                                file_url = item.sample_url;
-                                                                large_file_url = item.jpeg_url;
-                                                                debug(file_url);
+                                                        else if (key == 'danbooru') {
+                                                                created_date = new Date(item.created_at);
                                                         }
-                                                        files.push({
-                                                                'file_url': file_url,
-                                                                'large_file_url': large_file_url
-                                                        });
+                                                        debug(created_date);
+                                                        if (created_date > date && created_date - date < day) {
+                                                                let file_url = null;
+                                                                let large_file_url = null;
+                                                                if (key == 'danbooru') {
+                                                                        file_url = item.file_url;
+                                                                        large_file_url = item.large_file_url;
+                                                                        debug(file_url);
+                                                                }
+                                                                else if (key == 'yandere') {
+                                                                        file_url = item.sample_url;
+                                                                        large_file_url = item.jpeg_url;
+                                                                        debug(file_url);
+                                                                }
+                                                                files.push({
+                                                                        'file_url': file_url,
+                                                                        'large_file_url': large_file_url
+                                                                });
 
+                                                        }
+                                                        else if (created_date < date) {
+                                                                break;
+                                                        }
                                                 }
-                                                else if (created_date < date) {
-                                                        break;
+                                                if (files.length > 0) {
+                                                        let icon = info.lastChild;
+                                                        icon.innerHTML = '&#128273;&#128275;';
+                                                        debug(files);
+                                                        pair.push({
+                                                                'href': href,
+                                                                'files': files
+                                                        });
+                                                        break
                                                 }
-                                        }
-                                        if (files.length > 0) {
-                                                let icon = info.lastChild;
-                                                icon.innerHTML = '&#128273;&#128275;';
-                                                debug(files);
-                                                pair.push({
-                                                        'href': href,
-                                                        'files': files
-                                                });
+
                                         }
                                 }
                         }
@@ -385,88 +339,59 @@ let init = function () {
         if (window.self === window.top) {
                 if (/^https:\/\/\w+.fanbox.cc\/$/.test(window.location.href)) {
                         if (config.obj == null) {
-                                if (config.api.yandere.enable) {
-                                        get_artist().then(
-                                                function (resolve) {
-                                                        let json = resolve;
-                                                        const keyword = json.alias_id;
-                                                        const url = config.api.current.artist_name.replace('{{keyword}}', keyword);
-                                                        const obj = new requestObject(url);
-                                                        debug(url);
-                                                        httpRequest(obj).then(
-                                                                function (resolve) {
-                                                                        let alias = resolve.finalUrl.match(/title=(.+)/)[1];
-                                                                        json.origin_name = json.name;
-                                                                        json.name = alias;
-                                                                        debug(alias);
-                                                                        get_artist(json).then(
-                                                                                function (resolve) {
-                                                                                        let artist = resolve;
-                                                                                        debug(artist.name);
-                                                                                        get_posts(artist).then(
-                                                                                                (resolve) => {
-                                                                                                        unlock(resolve);
-                                                                                                }
-                                                                                        );
-                                                                                }
-                                                                        );
-                                                                }
-                                                        );
-
-                                                },
-                                                (reject) => {
-                                                        debug(reject);
-                                                        toggle(false);
-                                                        get_artist().then(
-                                                                function (resolve) {
-                                                                        let artist = resolve;
-                                                                        debug(artist.name);
-                                                                        get_posts(artist).then(
-                                                                                (resolve) => {
-                                                                                        unlock(resolve);
-                                                                                }
-                                                                        );
-                                                                }
-                                                        );
-
-                                                }
-                                        );
+                                config.obj = {
+                                        src: {},
+                                        update: null,
+                                        pair: null,
+                                        suc: 0,
                                 }
-                                else {
-                                        get_artist().then(
-                                                function (resolve) {
-                                                        let artist = resolve;
-                                                        debug(artist.name);
-                                                        get_posts(artist).then(
-                                                                (resolve) => {
-                                                                        unlock(resolve);
-                                                                }
-                                                        );
-                                                }
-                                        );
+                                for (let key in config.api) {
+                                        debug(key);
+                                        if (key == 'yandere') {
+                                                get_artist(key).then(
+                                                        () => {
+                                                                const keyword = config.obj.src[key].artist.alias_id;
+                                                                const url = config.api[key].artist_name.replace('{{keyword}}', keyword);
+                                                                const obj = new requestObject(url);
+                                                                debug(url);
+                                                                httpRequest(obj).then(
+                                                                        function (resolve) {
+                                                                                let alias = resolve.finalUrl.match(/title=(.+)/)[1];
+                                                                                config.obj.src[key].artist['origin_name'] = config.obj.src[key].artist.name;
+                                                                                config.obj.src[key].artist.name = alias;
+                                                                                debug(alias);
+                                                                                get_posts(key);
+                                                                        }
+                                                                );
+
+                                                        }
+                                                );
+                                        }
+                                        else if (key == 'danbooru') {
+                                                get_artist(key).then(
+                                                        () => {
+                                                                get_posts(key);
+                                                        }
+                                                );
+                                        }
                                 }
                         }
                         else {
                                 const hour = 60 * 60 * 1000;
                                 if (Date.now() - new Date(config.obj.update) > hour) {
-                                        debug(config.obj.artist.name);
-                                        get_posts(config.obj.artist).then(
-                                                (resolve) => {
-                                                        unlock(resolve);
-                                                }
-                                        );
-                                }
-                                else {
-                                        unlock(config.obj.posts);
+                                        for (let key in config.api) {
+                                                get_posts(key);
+                                        }
                                 }
                         }
+                        unlock();
                 }
                 else {
                         postsHandler();
                 }
         }
 }
-window.addEventListener('load', init);
+window.addEventListener('DOMContentLoaded', init);
 /**
  * Create a user setting prompt
  * @param {string} varName
