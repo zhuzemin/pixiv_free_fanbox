@@ -20,7 +20,7 @@
 // @grant         GM_setValue
 // @grant         GM_getValue
 // @author      zhuzemin
-// @version     1.04
+// @version     1.05
 // @supportURL  https://github.com/zhuzemin
 // @connect-src danbooru.donmai.us
 // @connect-src cse.google.com
@@ -46,7 +46,7 @@ let config = {
         },
         'hostname': getLocation(window.location.href).hostname,
         'obj': null,
-        'changed': false,
+        'last_idx': 0,
 }
 let debug = config.debug ? console.log.bind(console) : function () {
 };
@@ -155,6 +155,7 @@ function save_obj(flag, json) {
                 'artist': json,
                 'posts': null,
         };
+        GM_setValue(config.hostname, config.obj);
 }
 
 function get_posts(flag) {
@@ -171,6 +172,7 @@ function get_posts(flag) {
                                         config.obj.update = Date.now();
                                         config.obj.suc++;
                                         debug('get posts finish');
+                                        GM_setValue(config.hostname, config.obj);
                                         resolve('suc');
                                 },
                                 () => {
@@ -186,105 +188,124 @@ function unlock() {
         debug('unlock');
         const day = 60 * 60 * 24 * 1000;
         debug(day);
+        let pair = 0;
+        let running = false;
         let interval = setInterval(() => {
-                let parent = null;
-                for (let xpath of ['//*[@id="root"]/div[5]/div[1]/div[2]/div[3]/div/div/div[1]', '/html/body/div/div[5]/div[1]/div/div[3]/div/div/div[1]']) {
-                        parent = getElementByXpath(xpath);
-                        if (parent != null) {
-                                debug(parent.childNodes.length);
-                                break;
-                        }
-                }
-                if (parent != null && parent.childNodes.length >= 11 && !config.changed && config.obj.suc == Object.keys(config.api).length) {
-                        //clearInterval(interval);
-                        let pair = [];
-                        for (let i = 0; i < parent.childNodes.length; i++) {
-                                let child = parent.childNodes[i];
-                                debug(child.className);
-                                if (child.className == '') {
-                                        child.addEventListener('click', () => {
-                                                postsHandler();
-                                        });
-                                        const href = child.firstChild.lastChild.href;
-                                        let info = child.firstChild.lastChild.firstChild.firstChild;
-                                        debug(info.textContent);
-                                        debug(info.querySelectorAll('div')[1].lastChild.textContent);
-                                        const date = new Date(info.querySelectorAll('div')[1].lastChild.textContent);
-                                        debug(date);
-                                        let files = [];
-                                        for (let key in config.obj.src) {
-                                                const posts = config.obj.src[key].posts;
-                                                for (let item of posts) {
-                                                        let created_date = null;
-                                                        if (key == 'yandere') {
-                                                                debug(item.created_at * 1000);
-                                                                created_date = new Date(item.created_at * 1000);
-                                                        }
-                                                        else if (key == 'danbooru') {
-                                                                created_date = new Date(item.created_at);
-                                                        }
-                                                        debug(created_date);
-                                                        if ((created_date > date && item.source == href) || (created_date > date && created_date - date < day)) {
-                                                                let file_url = null;
-                                                                let large_file_url = null;
-                                                                if (key == 'danbooru') {
-                                                                        file_url = item.file_url;
-                                                                        large_file_url = item.large_file_url;
-                                                                        debug(file_url);
-                                                                }
-                                                                else if (key == 'yandere') {
-                                                                        file_url = item.sample_url;
-                                                                        large_file_url = item.jpeg_url;
-                                                                        debug(file_url);
-                                                                }
-                                                                files.push({
-                                                                        'file_url': file_url,
-                                                                        'large_file_url': large_file_url
+                if (config.obj.suc == Object.keys(config.api).length && !running) {
+                        running = true;
+                        let parent = null;
+                        for (let xpath of ['//*[@id="root"]/div[5]/div[1]/div[2]/div[3]/div/div/div[1]', '/html/body/div/div[5]/div[1]/div/div[3]/div/div/div[1]']) {
+                                parent = getElementByXpath(xpath);
+                                if (parent != null && parent.childNodes.length > 3) {
+                                        debug(parent.childNodes.length);
+                                        for (let i = 0; i < parent.childNodes.length; i++) {
+                                                let child = parent.childNodes[i];
+                                                debug(child.className);
+                                                if (child.className == '') {
+                                                        if (i >= config.last_idx) {
+                                                                child.addEventListener('click', () => {
+                                                                        postsHandler();
                                                                 });
-
                                                         }
-                                                        else if (created_date < date) {
-                                                                break;
+                                                        let info = child.firstChild.lastChild.firstChild.firstChild;
+                                                        const href = child.firstChild.lastChild.href;
+                                                        debug(href);
+                                                        if (config.last_idx < parent.childNodes.length) {
+                                                                debug(info.textContent);
+                                                                debug(info.querySelectorAll('div')[1].lastChild.textContent);
+                                                                const date = new Date(info.querySelectorAll('div')[1].lastChild.textContent);
+                                                                debug(date);
+                                                                let files = [];
+                                                                for (let key in config.obj.src) {
+                                                                        const posts = config.obj.src[key].posts;
+                                                                        for (let item of posts) {
+                                                                                let created_date = null;
+                                                                                if (key == 'yandere') {
+                                                                                        debug(item.created_at * 1000);
+                                                                                        created_date = new Date(item.created_at * 1000);
+                                                                                }
+                                                                                else if (key == 'danbooru') {
+                                                                                        created_date = new Date(item.created_at);
+                                                                                }
+                                                                                debug(created_date);
+                                                                                if (item.source == href || (created_date > date && created_date - date < day)) {
+                                                                                        let file_url = null;
+                                                                                        let large_file_url = null;
+                                                                                        if (key == 'danbooru') {
+                                                                                                file_url = item.large_file_url; //api was reverse
+                                                                                                large_file_url = item.file_url;
+                                                                                                debug(file_url);
+                                                                                        }
+                                                                                        else if (key == 'yandere') {
+                                                                                                file_url = item.sample_url;
+                                                                                                large_file_url = item.jpeg_url;
+                                                                                                debug(file_url);
+                                                                                        }
+                                                                                        files.push({
+                                                                                                'file_url': file_url,
+                                                                                                'large_file_url': large_file_url
+                                                                                        });
+                                                                                }
+                                                                        }
+                                                                }
+                                                                if (files.length > 0) {
+                                                                        debug(files);
+                                                                        config.obj.pair.push({
+                                                                                'href': href,
+                                                                                'files': files
+                                                                        });
+                                                                }
                                                         }
-                                                }
-                                                if (files.length > 0) {
-                                                        let icon = info.lastChild;
-                                                        icon.innerHTML = '&#128273;&#128275;';
-                                                        debug(files);
-                                                        pair.push({
-                                                                'href': href,
-                                                                'files': files
-                                                        });
-                                                        break
+                                                        for (let item of config.obj.pair) {
+                                                                if (item.href == href) {
+                                                                        let icon = info.lastChild;
+                                                                        icon.innerHTML = '&#128273;&#128275;';
+                                                                        break;
+                                                                }
+                                                        }
                                                 }
                                         }
+                                        if (Object.keys(config.obj.pair).length > pair) {
+                                                GM_setValue(config.hostname, config.obj);
+                                                pair = Object.keys(config.obj.pair).length;
+                                        }
+                                        config.last_idx = parent.childNodes.length;
+                                        break;
                                 }
                         }
-                        config.obj.pair = pair;
-                        GM_setValue(config.hostname, config.obj);
-                        config.changed = true;
+                        running = false;
                 }
         }, 1000);
 }
 
 function insert(element, file_url, large_file_url) {
+        if (file_url.includes('yande.re')) {
+                let obj = new requestObject(file_url);
+                obj.respType = 'blob';
+                obj.headers['referer'] = 'https://yande.re';
+                httpRequest(obj).then((result) => {
+                        let url = get_url(result.response);
+                        insert(element, url, large_file_url);
+                });
+        }
+        else {
 
-        let img = document.createElement('img');
-        img.style.display = 'block';
-        img.style.marginLeft = 'auto';
-        img.style.marginRight = 'auto';
-        img.src = file_url;
-        img.alt = large_file_url;
-        img.referrerPolicy = 'no-referrer';
-        img.addEventListener('click', function () {
-                let div = document.querySelector('#free_fanbox');
-                div.firstChild.src = this.alt;
-                div.style.visibility = 'visible';
-        });
-        const newImg = img.cloneNode(true);
-        let div = document.createElement('div');
-        div.id = 'free_fanbox';
-        div.style = `
+                let img = document.createElement('img');
+                img.style.display = 'block';
+                img.style.marginLeft = 'auto';
+                img.style.marginRight = 'auto';
+                img.src = file_url;
+                img.alt = large_file_url;
+                img.referrerPolicy = 'no-referrer';
+                img.addEventListener('click', function () {
+                        let div = document.querySelector('#free_fanbox');
+                        div.firstChild.src = this.alt;
+                        div.style.visibility = 'visible';
+                });
+                const newImg = img.cloneNode(true);
+                let div = document.createElement('div');
+                div.id = 'free_fanbox';
+                div.style = `
 width:100%;
 height:100%;
 z-index:1000;
@@ -297,24 +318,25 @@ top: 50%;
 left: 50%;
 transform: translate(-50%, -50%);
 `;
-        div.append(newImg);
-        div.addEventListener('click', function () {
-                this.style.visibility = 'hidden';
-        })
-        element.appendChild(img);
-        element.appendChild(div);
-        if (img.width > img.height) {
+                div.append(newImg);
+                div.addEventListener('click', function () {
+                        this.style.visibility = 'hidden';
+                })
+                element.appendChild(img);
+                element.appendChild(div);
+                if (img.width > img.height) {
 
-                img.style.width = '720px';
-        } else {
+                        img.style.width = '720px';
+                } else {
 
-                img.style.height = '731px';
+                        img.style.height = '731px';
+                }
         }
 }
 
 function postsHandler() {
         debug('posts');
-        config.changed = false;
+        config.last_idx = 0;
         debug(config.obj.pair.length);
         if (config.obj != null && config.obj.pair.length > 0) {
                 $Wait('article').then(function (resolve) {
@@ -376,6 +398,7 @@ let init = function () {
                         else {
                                 const hour = 60 * 60 * 1000;
                                 if (Date.now() - new Date(config.obj.update) > hour) {
+                                        config.obj.suc = 0;
                                         for (let key in config.api) {
                                                 get_posts(key);
                                         }
@@ -463,3 +486,9 @@ function getLocation(href) {
         l.href = href;
         return l;
 };
+
+function get_url(blob) {
+        var urlCreator = window.URL || window.webkitURL;
+        var imageUrl = urlCreator.createObjectURL(blob);
+        return imageUrl;
+}
