@@ -20,7 +20,7 @@
 // @grant         GM_setValue
 // @grant         GM_getValue
 // @author      zhuzemin
-// @version     1.05
+// @version     1.06
 // @supportURL  https://github.com/zhuzemin
 // @connect-src danbooru.donmai.us
 // @connect-src cse.google.com
@@ -28,6 +28,7 @@
 // ==/UserScript==
 //config
 let config = {
+        'ver': '1.06',
         'debug': false,
         'api': {
                 //'google': 'https://cse.google.com/cse/element/v1?cx=a5e2ba84062470dee&q={{keyword}}&safe=off&cse_tok=AJvRUv2fkaAldGWb8xOFfG2krdXS:1611290690970&callback=google.search.cse.api6888',
@@ -47,6 +48,7 @@ let config = {
         'hostname': getLocation(window.location.href).hostname,
         'obj': null,
         'last_idx': 0,
+        'retry': false,
 }
 let debug = config.debug ? console.log.bind(console) : function () {
 };
@@ -100,34 +102,66 @@ function googleHandler(resp, deprecated) {
                 });
 }
 
-function get_artist(flag) {
+function get_artist(flag, obj = null) {
         return new Promise(
                 (resolve, reject) => {
                         debug('get_artist');
-                        let keyword = null;
                         if (flag == 'yandere') {
                                 let interval = setInterval(() => {
                                         let elem = document.querySelector('h1');
                                         if (elem.textContent != '') {
                                                 clearInterval(interval);
-                                                keyword = encodeURIComponent(elem.textContent);
+                                                const keyword = encodeURIComponent(elem.textContent);
                                                 const url = config.api[flag].artists.replace('{{keyword}}', keyword);
                                                 const obj = new requestObject(url);
+                                                resolve(get_artist('yandere_name', obj));
                                                 debug(url);
-                                                httpRequest(obj).then(
-                                                        function (result) {
-                                                                if (result.response.length > 0) {
-                                                                        let json = result.response[0];
-                                                                        save_obj(flag, json)
-                                                                        resolve('suc');
-
-                                                                }
-                                                                else {
-                                                                        reject('error');
-                                                                }
-                                                        });
                                         }
                                 }, 1000);
+                        }
+                        else if (flag == 'yandere_name') {
+                                debug('yandere_name');
+                                flag = 'yandere';
+                                httpRequest(obj).then(
+                                        function (result) {
+                                                debug(config.retry);
+                                                if (result.response.length > 0) {
+                                                        let json = result.response[0];
+                                                        const keyword = json.id;
+                                                        const url = config.api[flag].artist_name.replace('{{keyword}}', keyword);
+                                                        const obj = new requestObject(url);
+                                                        debug(url);
+                                                        save_obj(flag, json)
+                                                        resolve(get_artist('yandere_title', obj));
+                                                }
+                                                else if (!config.retry) {
+                                                        let interval = setInterval(() => {
+                                                                if (config.obj.src != null) {
+                                                                        clearInterval(interval);
+                                                                        const keyword = config.obj.src.danbooru.artist.name;
+                                                                        const url = config.api[flag].artists.replace('{{keyword}}', keyword);
+                                                                        const obj = new requestObject(url);
+                                                                        debug(url);
+                                                                        config.retry = true;
+                                                                        resolve(get_artist('yandere_name', obj));
+                                                                }
+                                                        }, 1000);
+
+                                                }
+                                        });
+
+                        }
+                        else if (flag == 'yandere_title') {
+                                flag = 'yandere';
+                                httpRequest(obj).then(
+                                        function (result) {
+                                                let alias = result.finalUrl.match(/title=(.+)/)[1];
+                                                config.obj.src[flag].artist['origin_name'] = config.obj.src[flag].artist.name;
+                                                config.obj.src[flag].artist.name = alias;
+                                                debug(alias);
+                                                resolve('suc');
+                                        }
+                                );
                         }
                         else if (flag == 'danbooru') {
                                 keyword = encodeURIComponent(window.location.href);
@@ -140,10 +174,6 @@ function get_artist(flag) {
                                                         let json = result.response[0];
                                                         save_obj(flag, json)
                                                         resolve('suc');
-
-                                                }
-                                                else {
-                                                        reject('error');
                                                 }
                                         });
                         }
@@ -221,13 +251,13 @@ function unlock() {
                                                                         for (let item of posts) {
                                                                                 let created_date = null;
                                                                                 if (key == 'yandere') {
-                                                                                        debug(item.created_at * 1000);
+                                                                                        //debug(item.created_at * 1000);
                                                                                         created_date = new Date(item.created_at * 1000);
                                                                                 }
                                                                                 else if (key == 'danbooru') {
                                                                                         created_date = new Date(item.created_at);
                                                                                 }
-                                                                                debug(created_date);
+                                                                                //debug(created_date);
                                                                                 if (item.source == href || (created_date > date && created_date - date < day)) {
                                                                                         let file_url = null;
                                                                                         let large_file_url = null;
@@ -357,42 +387,21 @@ function postsHandler() {
 let init = function () {
         if (window.self === window.top) {
                 if (/^https:\/\/\w+.fanbox.cc\/$/.test(window.location.href)) {
-                        if (config.obj == null) {
+                        if (config.obj == null || (config.obj.ver == undefined || config.obj.ver != config.ver)) {
                                 config.obj = {
                                         src: {},
                                         update: null,
-                                        pair: null,
+                                        pair: [],
                                         suc: 0,
+                                        ver: config.ver,
                                 }
                                 for (let key in config.api) {
                                         debug(key);
-                                        if (key == 'yandere') {
-                                                get_artist(key).then(
-                                                        () => {
-                                                                const keyword = config.obj.src[key].artist.alias_id;
-                                                                const url = config.api[key].artist_name.replace('{{keyword}}', keyword);
-                                                                const obj = new requestObject(url);
-                                                                debug(url);
-                                                                httpRequest(obj).then(
-                                                                        function (resolve) {
-                                                                                let alias = resolve.finalUrl.match(/title=(.+)/)[1];
-                                                                                config.obj.src[key].artist['origin_name'] = config.obj.src[key].artist.name;
-                                                                                config.obj.src[key].artist.name = alias;
-                                                                                debug(alias);
-                                                                                get_posts(key);
-                                                                        }
-                                                                );
-
-                                                        }
-                                                );
-                                        }
-                                        else if (key == 'danbooru') {
-                                                get_artist(key).then(
-                                                        () => {
-                                                                get_posts(key);
-                                                        }
-                                                );
-                                        }
+                                        get_artist(key).then(
+                                                () => {
+                                                        get_posts(key);
+                                                }
+                                        );
                                 }
                         }
                         else {
