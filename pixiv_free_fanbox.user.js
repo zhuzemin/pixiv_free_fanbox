@@ -20,7 +20,7 @@
 // @grant         GM_setValue
 // @grant         GM_getValue
 // @author      zhuzemin
-// @version     1.03
+// @version     1.04
 // @supportURL  https://github.com/zhuzemin
 // @connect-src danbooru.donmai.us
 // @connect-src cse.google.com
@@ -151,7 +151,6 @@ function get_artist(flag) {
 }
 
 function save_obj(flag, json) {
-
         config.obj.src[flag] = {
                 'artist': json,
                 'posts': null,
@@ -188,14 +187,14 @@ function unlock() {
         const day = 60 * 60 * 24 * 1000;
         debug(day);
         let interval = setInterval(() => {
-                let parent = null;//*[@id="root"]/div[5]/div[1]/div[2]/div[3]/div/div/div[1]
+                let parent = null;
                 for (let xpath of ['//*[@id="root"]/div[5]/div[1]/div[2]/div[3]/div/div/div[1]', '/html/body/div/div[5]/div[1]/div/div[3]/div/div/div[1]']) {
                         parent = getElementByXpath(xpath);
                         if (parent != null) {
+                                debug(parent.childNodes.length);
                                 break;
                         }
                 }
-                //debug(parent.childNodes.length);
                 if (parent != null && parent.childNodes.length >= 11 && !config.changed && config.obj.suc == Object.keys(config.api).length) {
                         //clearInterval(interval);
                         let pair = [];
@@ -225,7 +224,7 @@ function unlock() {
                                                                 created_date = new Date(item.created_at);
                                                         }
                                                         debug(created_date);
-                                                        if (created_date > date && created_date - date < day) {
+                                                        if ((created_date > date && item.source == href) || (created_date > date && created_date - date < day)) {
                                                                 let file_url = null;
                                                                 let large_file_url = null;
                                                                 if (key == 'danbooru') {
@@ -258,7 +257,6 @@ function unlock() {
                                                         });
                                                         break
                                                 }
-
                                         }
                                 }
                         }
@@ -327,7 +325,6 @@ function postsHandler() {
                                         for (let file of item.files.reverse()) {
                                                 insert(resolve, file.file_url, file.large_file_url);
                                         }
-
                                         break;
                                 }
                         }
