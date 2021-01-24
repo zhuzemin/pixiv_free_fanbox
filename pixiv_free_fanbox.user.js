@@ -20,7 +20,7 @@
 // @grant         GM_setValue
 // @grant         GM_getValue
 // @author      zhuzemin
-// @version     1.07
+// @version     1.08
 // @supportURL  https://github.com/zhuzemin
 // @connect-src danbooru.donmai.us
 // @connect-src cse.google.com
@@ -28,7 +28,7 @@
 // ==/UserScript==
 //config
 let config = {
-        'ver': '1.07',
+        'ver': '1.08',
         'debug': false,
         'api': {
                 //'google': 'https://cse.google.com/cse/element/v1?cx=a5e2ba84062470dee&q={{keyword}}&safe=off&cse_tok=AJvRUv2fkaAldGWb8xOFfG2krdXS:1611290690970&callback=google.search.cse.api6888',
@@ -265,7 +265,7 @@ function unlock() {
                                                                                         created_date = new Date(item.created_at);
                                                                                 }
                                                                                 //debug(created_date);
-                                                                                if (item.source == href || (created_date > date && created_date - date < day)) {
+                                                                                if (item.source == href || (created_date > date && created_date - date < day*2)) {
                                                                                         let file_url = null;
                                                                                         let large_file_url = null;
                                                                                         if (key == 'danbooru') {
