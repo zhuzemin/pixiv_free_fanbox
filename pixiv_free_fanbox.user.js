@@ -20,7 +20,7 @@
 // @grant         GM_setValue
 // @grant         GM_getValue
 // @author      zhuzemin
-// @version     1.08
+// @version     1.10
 // @supportURL  https://github.com/zhuzemin
 // @connect-src danbooru.donmai.us
 // @connect-src cse.google.com
@@ -28,14 +28,15 @@
 // ==/UserScript==
 //config
 let config = {
-        'ver': '1.08',
+        'ver': '1.10',
         'debug': false,
         'api': {
                 //'google': 'https://cse.google.com/cse/element/v1?cx=a5e2ba84062470dee&q={{keyword}}&safe=off&cse_tok=AJvRUv2fkaAldGWb8xOFfG2krdXS:1611290690970&callback=google.search.cse.api6888',
 
                 'danbooru': {
                         'base': 'https://danbooru.donmai.us',
-                        'artists': '/artists.json?search[url_matches]={{keyword}}',
+                        //'artists': '/artists.json?search[url_matches]={{keyword}}',
+                        'artists': '/artists.json?search[any_name_matches]={{keyword}}',
                         'posts': '/posts.json?tags={{keyword}}&limit=200',
                 },
                 'yandere': {
@@ -158,7 +159,7 @@ function get_artist(flag, obj = null) {
                                         function (result) {
                                                 let dom = new DOMParser().parseFromString(result.responseText, "text/html");
                                                 debug(dom.title);
-                                                let elems=dom.querySelectorAll('a[href*="/wiki/show?title="]');
+                                                let elems = dom.querySelectorAll('a[href*="/wiki/show?title="]');
                                                 debug(elems.length);
                                                 debug(elems[1].href);
                                                 let alias = elems[1].href.match(/title=(.+)/)[1];
@@ -171,7 +172,8 @@ function get_artist(flag, obj = null) {
                                 );
                         }
                         else if (flag == 'danbooru') {
-                                keyword = encodeURIComponent(window.location.href);
+                                //keyword = encodeURIComponent(window.location.href);
+                                keyword = window.location.href.match(/https:\/\/(\w+)\.fanbox\.cc/)[1];
                                 const url = config.api[flag].artists.replace('{{keyword}}', keyword);
                                 const obj = new requestObject(url);
                                 debug(url);
@@ -228,33 +230,37 @@ function unlock() {
         let pair = 0;
         let running = false;
         let interval = setInterval(() => {
-                if (config.obj.suc == Object.keys(config.api).length && !running) {
+                if (config.obj.suc > 0 && !running) {
                         running = true;
                         let parent = null;
-                        for (let xpath of ['//*[@id="root"]/div[5]/div[1]/div[2]/div[3]/div/div/div[1]', '/html/body/div/div[5]/div[1]/div/div[3]/div/div/div[1]']) {
+                        for (let xpath of ['/html/body/div/div[5]/div[1]/div/div[3]/div/div[1]/div[2]', '//*[@id="root"]/div[5]/div[1]/div[2]/div[3]/div/div/div[1]', '/html/body/div/div[5]/div[1]/div/div[3]/div/div/div[1]']) {
                                 parent = getElementByXpath(xpath);
                                 if (parent != null && parent.childNodes.length > 3) {
                                         debug(parent.childNodes.length);
                                         for (let i = 0; i < parent.childNodes.length; i++) {
                                                 let child = parent.childNodes[i];
-                                                debug(child.className);
+                                                //debug(child.className);
                                                 if (child.className == '') {
                                                         if (i >= config.last_idx) {
                                                                 child.addEventListener('click', () => {
                                                                         postsHandler();
                                                                 });
                                                         }
-                                                        let info = child.firstChild.lastChild.firstChild.firstChild;
-                                                        const href = child.firstChild.lastChild.href;
-                                                        debug(href);
+                                                        let info = child.firstChild.lastChild.firstChild;
+                                                        const href = child.firstChild.href;
+                                                        //debug(href);
                                                         if (config.last_idx < parent.childNodes.length) {
                                                                 debug(info.textContent);
-                                                                debug(info.querySelectorAll('div')[1].lastChild.textContent);
-                                                                const date = new Date(info.querySelectorAll('div')[1].lastChild.textContent);
+                                                                //debug(info.querySelectorAll('div')[1].lastChild.textContent);
+                                                                //const date = new Date(info.querySelectorAll('div')[1].lastChild.textContent);
+                                                                const date = new Date(info.textContent);
                                                                 debug(date);
                                                                 let files = [];
                                                                 for (let key in config.obj.src) {
                                                                         const posts = config.obj.src[key].posts;
+                                                                        if (posts == null) {
+                                                                                continue;
+                                                                        }
                                                                         for (let item of posts) {
                                                                                 let created_date = null;
                                                                                 if (key == 'yandere') {
@@ -264,8 +270,8 @@ function unlock() {
                                                                                 else if (key == 'danbooru') {
                                                                                         created_date = new Date(item.created_at);
                                                                                 }
-                                                                                //debug(created_date);
-                                                                                if (item.source == href || (created_date > date && created_date - date < day*2)) {
+                                                                                debug(created_date);
+                                                                                if (item.source == href || (created_date > date && created_date - date < day * 2)) {
                                                                                         let file_url = null;
                                                                                         let large_file_url = null;
                                                                                         if (key == 'danbooru') {
@@ -284,6 +290,8 @@ function unlock() {
                                                                                         });
                                                                                 }
                                                                                 else if (date - created_date > day * 3) {
+
+                                                                                        debug("here");
                                                                                         break;
                                                                                 }
                                                                         }
